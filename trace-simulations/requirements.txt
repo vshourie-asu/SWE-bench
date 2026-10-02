@@ -1,0 +1,11 @@
+# Dependencies for the trace-simulations helper scripts.
+#
+#   pick_instances.py   -> needs `datasets` to read the SWE-bench Verified `difficulty` field
+#   build_telemetry.py  -> pure standard library (no third-party deps)
+#
+# pandas + networkx are not needed to *produce* telemetry, but the README's analysis
+# snippets use them to *load* events.jsonl / graph.graphml, so they're included here so
+# the environment covers the full documented workflow.
+datasets>=2.0.0
+pandas>=1.5.0
+networkx>=3.0

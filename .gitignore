@@ -175,3 +175,6 @@ notebooks/
 gold.*.json
 loose-ends.txt
 todo_later.txt
+
+# Local scratch space for SWE-bench trace / simulation runs
+trace-simulations/varun_credentials.conf
