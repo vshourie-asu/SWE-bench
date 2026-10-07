@@ -78,13 +78,23 @@ def _preview(text: Any) -> str:
 
 
 def message_to_event(idx: int, msg: dict) -> dict:
-    """Normalize one trajectory message into a flat telemetry event."""
+    """Normalize one trajectory message into a flat telemetry event.
+
+    mini-SWE-agent v2 uses OpenAI tool-calling, so the message roles are:
+      system     -> the system prompt (one message)
+      user       -> the task statement, and any non-tool user turns
+      assistant  -> the model's turns; tool-calling turns carry extra.actions
+      tool       -> the shell output of an assistant's tool call (the observation)
+      exit       -> the terminal step, carrying the final submission
+    (Older trajectories returned observations as `user`; we still map that too.)
+    """
     role = msg.get("role", "")
     extra = msg.get("extra", {}) or {}
     actions = extra.get("actions", []) or []
     content = msg.get("content", "")
     kind = {
         "assistant": "action" if actions else "thought",
+        "tool": "observation",
         "user": "observation",
         "system": "system",
         "exit": "exit",
@@ -93,8 +103,9 @@ def message_to_event(idx: int, msg: dict) -> dict:
         "step_index": idx,
         "role": role,
         "kind": kind,
-        "actions": actions,
+        "actions": [a.get("command") if isinstance(a, dict) else a for a in actions],
         "cost": extra.get("cost", 0.0),
+        "returncode": extra.get("returncode"),
         "exit_status": extra.get("exit_status"),
         "is_submission": bool(extra.get("submission")),
         "text": content,
@@ -117,6 +128,7 @@ def build_graph(instance_id: str, events: list[dict]) -> dict:
                 "actions": ev["actions"],
                 "n_actions": len(ev["actions"]),
                 "cost": ev["cost"],
+                "returncode": ev["returncode"],
                 "is_submission": ev["is_submission"],
             }
         )
@@ -230,7 +242,8 @@ def process_trajectory(traj_path: Path, out_root: Path, verdict: dict[str, bool]
     n_actions = sum(len(ev["actions"]) for ev in events)
     return {
         "instance_id": instance_id,
-        "model_name_or_path": (data.get("model", {}) or {}).get("model_name")
+        "model_name_or_path": info.get("config", {}).get("model", {}).get("model_name")
+        or (data.get("model", {}) or {}).get("model_name")
         or info.get("config", {}).get("agent", {}).get("model_name"),
         "exit_status": info.get("exit_status"),
         "has_submission": bool(info.get("submission")),

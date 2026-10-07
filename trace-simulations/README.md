@@ -441,9 +441,9 @@ swebench eval verified \
   -j 2
 ```
 
-Results land in `logs/evaluation/createai-gpt4o/results.json` (resolved vs. unresolved
-per instance), and because you mounted `logs/`, they're on your host too. Keep this path
-handy — step 7 folds the resolved/unresolved verdict into the telemetry.
+Results land in `logs/evaluation/createai-gpt5_6_luna/results.json` (resolved vs.
+unresolved per instance), and because you mounted `logs/`, they're on your host too. Keep
+this path handy — step 7 folds the resolved/unresolved verdict into the telemetry.
 
 > **Caching note:** results are cached by `run_id` + `instance_id`. If you change the
 > model or the patches, use a **new** `--run-id`, or the harness will reuse old results.
@@ -460,33 +460,59 @@ env (see the top of this README):
 ```bash
 conda activate trace-sims
 python trace-simulations/build_telemetry.py \
-  --preds logs/preds/createai-gpt4o \
-  --out   logs/telemetry/createai-gpt4o \
-  --results logs/evaluation/createai-gpt4o/results.json
+  --preds   trace-simulations/logs/preds/gpt5_6_luna \
+  --out     trace-simulations/logs/telemetry/gpt5_6_luna \
+  --results trace-simulations/logs/evaluation/createai-gpt5_6_luna/results.json
 ```
 
-`--results` is optional; include it to fold the resolved/unresolved verdict into each
-instance's record.
+`--preds` is the mini-SWE-agent output dir from step 5 (it holds `preds.json` and the
+per-instance `*.traj.json` files). `--results` is optional; include it to fold the
+resolved/unresolved verdict from step 6 into each instance's record.
+
+> **Note on the trajectory format.** mini-SWE-agent v2 (what the container ships) uses
+> OpenAI tool-calling, so an `assistant` turn issues a shell command as a tool call and
+> the output comes back as a `tool`-role message. `build_telemetry.py` understands this —
+> it treats `tool` messages as observations and links each command to its output. (The
+> cost fields are populated because you registered the model price in step 5; without
+> that they'd be `0.0`.)
 
 ### What it produces
 
 Everything lands under one easy-to-access directory, one folder per instance plus a
-run-level manifest:
+run-level manifest. This is the real output from the `gpt5_6_luna` run:
 
 ```
-logs/telemetry/createai-gpt4o/
-├── manifest.json                 # one row per instance: ids, model, exit_status, cost,
-│                                 # step/action counts, resolved verdict, artifact paths
-├── django__django-11099/
-│   ├── events.jsonl              # one JSON object per agent step, in order (the flat log)
-│   ├── graph.json                # {"nodes": [...], "edges": [...]} directed graph
-│   └── graph.graphml             # same graph as GraphML (Gephi / Cytoscape / networkx)
-├── astropy__astropy-14995/
+trace-simulations/logs/telemetry/gpt5_6_luna/
+├── manifest.json                       # one row per instance: ids, model, exit_status,
+│                                        # cost, step/action counts, resolved verdict, paths
+├── astropy__astropy-14369/
+│   ├── events.jsonl                     # one JSON object per agent step, in order
+│   ├── graph.json                       # {"nodes": [...], "edges": [...]} directed graph
+│   └── graph.graphml                    # same graph as GraphML (Gephi / Cytoscape / networkx)
+├── django__django-14238/
 │   └── ...
-├── django__django-13401/
+├── pydata__xarray-6992/
 │   └── ...
-└── sympy__sympy-18835/
+└── scikit-learn__scikit-learn-13496/
     └── ...
+```
+
+A `manifest.json` row from that run looks like this (one per instance):
+
+```json
+{
+  "instance_id": "astropy__astropy-14369",
+  "model_name_or_path": "openai/openai/gpt5_6_luna",
+  "exit_status": "Submitted",
+  "resolved": true,
+  "n_steps": 28,
+  "n_actions": 12,
+  "api_calls": 14,
+  "instance_cost": 0.0535394,
+  "mini_version": "2.4.6",
+  "trajectory_format": "mini-swe-agent-1.1",
+  "artifacts": { "events": "...", "graph_json": "...", "graphml": "..." }
+}
 ```
 
 ### The graph model (what downstream researchers get)
@@ -494,17 +520,20 @@ logs/telemetry/createai-gpt4o/
 Each trajectory becomes a **directed graph** of the agent's loop:
 
 - **Nodes** are agent steps. Every node carries `step_index`, `role`
-  (`system` / `user` / `assistant` / `exit`), `kind` (`system` / `observation` /
+  (`system` / `user` / `assistant` / `tool` / `exit`), `kind` (`system` / `observation` /
   `thought` / `action` / `exit`), a truncated `text` preview, `full_text_len`, the shell
-  `actions` for action steps, `n_actions`, `cost`, and `is_submission`.
+  `actions` for action steps, `n_actions`, `cost`, `returncode` (for tool observations),
+  and `is_submission`.
 - **Edges** come in two types:
   - `next` — step *N* → step *N+1*, the temporal flow of the whole run.
-  - `acts_on` — an `action` step → the `observation` step it produced, linking a command
+  - `acts_on` — an `action` step → the `tool` observation it produced, linking a command
     to its result.
 
 That's enough to render the full think → act → observe loop as a graph and to compute
 derived metrics: steps-to-solution, action counts, cost per step, where a run stalls or
-loops, and how the shape differs between the easy, medium, and extremely-hard tasks.
+loops, and how the shape differs across difficulty labels. In the `gpt5_6_luna` run the
+graphs ranged from 22 steps / 10 actions (`pydata__xarray-6992`) to 30 steps / 16 actions
+(`scikit-learn__scikit-learn-13496`).
 
 ### Loading the graph
 
@@ -513,8 +542,10 @@ Any GraphML-aware tool opens `graph.graphml` directly — [Gephi](https://gephi.
 
 ```python
 import networkx as nx
-g = nx.read_graphml("logs/telemetry/createai-gpt4o/sympy__sympy-18835/graph.graphml")
-print(g.number_of_nodes(), g.number_of_edges())
+g = nx.read_graphml(
+    "trace-simulations/logs/telemetry/gpt5_6_luna/astropy__astropy-14369/graph.graphml"
+)
+print(g.number_of_nodes(), g.number_of_edges())   # e.g. 28 38
 ```
 
 Prefer your own pipeline? `graph.json` is a plain nodes/edges document, and
@@ -523,8 +554,10 @@ Prefer your own pipeline? `graph.json` is a plain nodes/edges document, and
 ```python
 import pandas as pd
 events = pd.read_json(
-    "logs/telemetry/createai-gpt4o/sympy__sympy-18835/events.jsonl", lines=True
+    "trace-simulations/logs/telemetry/gpt5_6_luna/astropy__astropy-14369/events.jsonl",
+    lines=True,
 )
+events.groupby("kind")["cost"].sum()   # cost by step kind
 ```
 
 > **Where telemetry lives:** by default under `logs/telemetry/<run-id>/`, which is on
@@ -535,10 +568,11 @@ events = pd.read_json(
 
 ## 8. What you hand to human raters
 
-For each of the 4 instances, give raters:
+For each of the 4 instances (`scikit-learn__scikit-learn-13496`, `django__django-14238`,
+`astropy__astropy-14369`, `pydata__xarray-6992`), give raters:
 
 1. **The issue text** — from the dataset (`problem_statement` field).
-2. **The model's patch** — from `preds.json`.
+2. **The model's patch** — from `preds.json` (the `model_patch` field for that instance).
 3. **The telemetry** — `events.jsonl` (readable step-by-step log) and `graph.graphml` /
    `graph.json` (for visualizing the agent's path), from step 7.
 4. **The gold patch** — the reference fix (from the dataset's `patch` field).
@@ -546,9 +580,10 @@ For each of the 4 instances, give raters:
 
 Because the four tasks span the full difficulty range (`<15 min fix` → `>4 hours`), a
 useful rubric looks at both outcome and process: *Is the patch correct? Is it minimal?
-Is the reasoning in the trajectory sound? Where did the agent spend its steps?* The
-graph telemetry makes that
-last question concrete — raters can literally see where a hard run looped or stalled.
+Is the reasoning in the trajectory sound? Where did the agent spend its steps?* The graph
+telemetry makes that last question concrete — raters can line up the per-instance step and
+action counts (e.g. the harder `scikit-learn` task took 30 steps / 16 actions vs. 22 / 10
+for `pydata__xarray`) and literally see where a run looped or stalled.
 
 ---
 
@@ -565,7 +600,7 @@ last question concrete — raters can literally see where a hard run looped or s
 | URL has `/v1/v1/...` in errors | You added a path after `/v1`. `OPENAI_API_BASE` must end at `/v1` with nothing after it. |
 | Results don't update after a change | Use a fresh `--run-id` (results are cached per run_id + instance_id). |
 | `build_telemetry.py` finds no trajectories | Point `--preds` at the inference output dir (the one holding `preds.json` and the per-instance folders), and make sure inference finished. |
-| `pick_instances.py` import error | Needs the `datasets` package (installed with SWE-bench). Run it inside the container or your SWE-bench env. |
+| `pick_instances.py` / `build_telemetry.py` import error | Activate the `trace-sims` env first (`conda activate trace-sims`); it has `datasets`, `pandas`, and `networkx`. |
 
 ---
 
@@ -584,13 +619,14 @@ swebench infer verified -m openai/openai/gpt5_6_luna -r createai-gpt5_6_luna -o 
   -- --filter "scikit-learn__scikit-learn-13496|django__django-14238|astropy__astropy-14369|pydata__xarray-6992"
 
 # grade the generated patches
-swebench eval verified -p logs/preds/createai-gpt4o/preds.json -r createai-gpt4o \
-  -i django__django-11099 -i astropy__astropy-14995 -i django__django-13401 -i sympy__sympy-18835 -j 2
+swebench eval verified -p logs/preds/gpt5_6_luna/preds.json -r createai-gpt5_6_luna \
+  -i scikit-learn__scikit-learn-13496 -i django__django-14238 -i astropy__astropy-14369 -i pydata__xarray-6992 -j 2
 
-# build graph-friendly telemetry from the trajectories
-python trace-simulations/build_telemetry.py --preds logs/preds/createai-gpt4o \
-  --out logs/telemetry/createai-gpt4o --results logs/evaluation/createai-gpt4o/results.json
+# build graph-friendly telemetry from the trajectories (run in the trace-sims env)
+python trace-simulations/build_telemetry.py --preds trace-simulations/logs/preds/gpt5_6_luna \
+  --out trace-simulations/logs/telemetry/gpt5_6_luna \
+  --results trace-simulations/logs/evaluation/createai-gpt5_6_luna/results.json
 
 # re-grade saved logs without rebuilding containers
-swebench report createai-gpt4o -d verified
+swebench report createai-gpt5_6_luna -d verified
 ```
