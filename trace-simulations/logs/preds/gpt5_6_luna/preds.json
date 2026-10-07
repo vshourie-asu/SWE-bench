@@ -1,0 +1,22 @@
+{
+  "astropy__astropy-14369": {
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "instance_id": "astropy__astropy-14369",
+    "model_patch": "diff --git a/astropy/units/format/cds.py b/astropy/units/format/cds.py\nindex 307e987ed..1c422e6f6 100644\n--- a/astropy/units/format/cds.py\n+++ b/astropy/units/format/cds.py\n@@ -182,7 +182,8 @@ class CDS(Base):\n         def p_division_of_units(p):\n             \"\"\"\n             division_of_units : DIVISION unit_expression\n-                              | unit_expression DIVISION combined_units\n+                              | unit_expression DIVISION unit_expression\n+                              | division_of_units DIVISION unit_expression\n             \"\"\"\n             if len(p) == 3:\n                 p[0] = p[2] ** -1\n"
+  },
+  "django__django-14238": {
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "instance_id": "django__django-14238",
+    "model_patch": "diff --git a/django/db/models/fields/__init__.py b/django/db/models/fields/__init__.py\nindex 0f53d9c30b..0ce7de02c6 100755\n--- a/django/db/models/fields/__init__.py\n+++ b/django/db/models/fields/__init__.py\n@@ -2524,7 +2524,7 @@ class AutoFieldMeta(type):\n         return isinstance(instance, self._subclasses) or super().__instancecheck__(instance)\n \n     def __subclasscheck__(self, subclass):\n-        return subclass in self._subclasses or super().__subclasscheck__(subclass)\n+        return issubclass(subclass, self._subclasses) or super().__subclasscheck__(subclass)\n \n \n class AutoField(AutoFieldMixin, IntegerField, metaclass=AutoFieldMeta):\n"
+  },
+  "pydata__xarray-6992": {
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "instance_id": "pydata__xarray-6992",
+    "model_patch": "diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py\nindex 620f32f8..265b4e96 100644\n--- a/xarray/core/dataset.py\n+++ b/xarray/core/dataset.py\n@@ -365,7 +365,9 @@ class DataVariables(Mapping[Any, \"DataArray\"]):\n         )\n \n     def __len__(self) -> int:\n-        return len(self._dataset._variables) - len(self._dataset._coord_names)\n+        return sum(\n+            key not in self._dataset._coord_names for key in self._dataset._variables\n+        )\n \n     def __contains__(self, key: Hashable) -> bool:\n         return key in self._dataset._variables and key not in self._dataset._coord_names\n"
+  },
+  "scikit-learn__scikit-learn-13496": {
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "instance_id": "scikit-learn__scikit-learn-13496",
+    "model_patch": "diff --git a/sklearn/ensemble/iforest.py b/sklearn/ensemble/iforest.py\nindex 8a1bd3625..f42c80532 100755\n--- a/sklearn/ensemble/iforest.py\n+++ b/sklearn/ensemble/iforest.py\n@@ -120,6 +120,11 @@ class IsolationForest(BaseBagging, OutlierMixin):\n     verbose : int, optional (default=0)\n         Controls the verbosity of the tree building process.\n \n+    warm_start : bool, optional (default=False)\n+        When set to ``True``, reuse the solution of the previous call to fit\n+        and add more estimators to the ensemble, otherwise, just fit a whole\n+        new forest. See :term:`the Glossary <warm_start>`.\n+\n \n     Attributes\n     ----------\n@@ -173,7 +178,8 @@ class IsolationForest(BaseBagging, OutlierMixin):\n                  n_jobs=None,\n                  behaviour='old',\n                  random_state=None,\n-                 verbose=0):\n+                 verbose=0,\n+                 warm_start=False):\n         super().__init__(\n             base_estimator=ExtraTreeRegressor(\n                 max_features=1,\n@@ -187,7 +193,8 @@ class IsolationForest(BaseBagging, OutlierMixin):\n             max_features=max_features,\n             n_jobs=n_jobs,\n             random_state=random_state,\n-            verbose=verbose)\n+            verbose=verbose,\n+            warm_start=warm_start)\n \n         self.behaviour = behaviour\n         self.contamination = contamination\n"
+  }
+}

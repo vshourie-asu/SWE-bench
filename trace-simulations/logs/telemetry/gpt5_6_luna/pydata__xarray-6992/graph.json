@@ -1,0 +1,463 @@
+{
+  "instance_id": "pydata__xarray-6992",
+  "nodes": [
+    {
+      "id": "pydata__xarray-6992:0",
+      "step_index": 0,
+      "role": "system",
+      "kind": "system",
+      "text": "You are a helpful assistant that can interact with a computer shell to solve programming tasks.",
+      "full_text_len": 95,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:1",
+      "step_index": 1,
+      "role": "user",
+      "kind": "observation",
+      "text": "<pr_description>\nConsider the following PR description:\nindex refactor: more `_coord_names` than `_variables` on Dataset\n### What happened?\n\n`xr.core.dataset.DataVariables` assumes that everything that is in `ds._dataset._variables` and not in `self._dataset._coord_names` is a \"data variable\". However, since the index refactor we can end up with more `_coord_names` than `_variables` which breaks a number of stuff (e.g. the repr).\n\n### What did you expect to happen?\n\nWell it seems this assumption is now wrong.\n\n### Minimal Complete Verifiable Example\n\n```Python\nds = xr.Dataset(coords={\"a\": (\"x\", [1, 2, 3]), \"b\": (\"x\", ['a', 'b', 'c'])})\r\nds.set_index(z=['a', 'b']).reset_index(\"z\", drop=True)\n```\n\n\n### MVCE confirmation\n\n- [ ] Minimal example — the example is as focused as reasonably possible to demonstrate the underlying issue in xarray.\n- [ ] Complete example — the example is self-contained, including all data and the text of any traceback.\n- [ ] Verifiable example — the example copy & pastes into an IPython prompt or [Binder notebook](https://mybinder.org/v2/gh/pydata/xarray/main?urlpath=lab/tree/doc/examples/blank_template.ipynb), returning the result.\n- [ ] New issue — a search of GitHub Issues suggests this is not a duplicate.\n\n### Relevant log output\n\n```Python\nValueError: __len__() should return >= 0\n```\n\n\n### Anything else we need to know?\n\nThe error comes from here\r\n\r\nhttps://github.com/pydata/xarray/blob/63ba862d03c8d0cd8b44d2071bc360e9fed4519d/xarray/core/dataset.py#L368\r\n\r\nBisected to #5692 - which probably does not help too much.\r\n\n\n### Environment\n\n<details>\r\n\r\n\r\n\r\n</details>\r\n\n\n</pr_description>\n\n<instructions>\n# Task Instructions\n\n## Overview\n\nYou're a software engineer interacting continuously with a computer by submitting commands.\nYou'll be helping implement necessary changes to meet requirements in the PR description.\nYour task is specifically to make changes to non-test files in the current directory in order to fix the issue described in the PR ",
+      "full_text_len": 6053,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:2",
+      "step_index": 2,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && grep -R \"class DataVariables\\|_coord_names\" -n xarray/core/dataset.py | head -40 && sed -n '300,410p' xarray/core/dataset.py && python - <<'PY'\nimport xarray as xr\nprint(xr.__version__)\nds = xr.Dataset(coords={\"a\": (\"x\", [1, 2, 3]), \"b\": (\"x\", ['a', 'b', 'c'])})\nresult = ds.set_index(z=[\"a\", \"b\"]).reset_index(\"z\", drop=True)\nprint(result)\nprint(result._variables)\nprint(result._coord_names)\nprint(result.data_vars)\nPY"
+      ],
+      "n_actions": 1,
+      "cost": 0.0005908,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:3",
+      "step_index": 3,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>1</returncode>\n<output>\n354:class DataVariables(Mapping[Any, \"DataArray\"]):\n364:            if key not in self._dataset._coord_names\n368:        return len(self._dataset._variables) - len(self._dataset._coord_names)\n371:        return key in self._dataset._variables and key not in self._dataset._coord_names\n374:        if key not in self._dataset._coord_names:\n403:            if key not in self._dataset._coord_names\n557:    _coord_names: set[Hashable]\n567:        \"_coord_names\",\n608:        self._coord_names = coord_names\n703:                if n not in self._coord_names\n750:            (type(self), self._variables, self._coord_names, self._attrs)\n821:            self._coord_names,\n872:            self._coord_names,\n960:        obj._coord_names = coord_names\n990:                self._coord_names = coord_names\n1004:                coord_names = self._coord_names.copy()\n1076:        new_coord_names = self._coord_names.copy()\n1095:            new_coord_names.add(name)\n1109:            new_coord_names.remove(name)\n1112:            variables=new_variables, coord_names=new_coord_names, indexes=new_indexes\n1118:            new_variables, new_coord_names = replaced._rename_vars({}, rename_dims)\n1120:                variables=new_variables, coord_names=new_coord_names, dims=dims\n1286:                if ref_name in self._coord_names or ref_name in self.dims:\n1302:            if k not in self._coord_names:\n1327:            if k in self._coord_names and set(self.variables[k].dims) <= needed_dims:\n1352:        yield HybridMappingProxy(keys=self._coord_names, mapping=self.coords)\n1566:        self._coord_names.discard(key)\n1581:        return self._coord_names == other._coord_names and utils.dict_equiv(\n1696:        obj._coord_names.update(names)\n1720:            names = self._coord_names - set(self._indexes)\n1733:        obj._coord_names.difference_update(names)\n2402:        coord_names = self._coord_names.copy()\n2461:        coord_names = self._coord_names & variabl",
+      "full_text_len": 6619,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 1,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:4",
+      "step_index": 4,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && grep -R \"def __len__(self).*_coord_names\\|class .*Variables\\|data_vars\" -n xarray/core | head -80 && sed -n '1320,1370p' xarray/core/dataset.py && sed -n '1530,1585p' xarray/core/dataset.py && grep -R \"DataVariables\" -n xarray tests | head -50"
+      ],
+      "n_actions": 1,
+      "cost": 0.0009322,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:5",
+      "step_index": 5,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\nxarray/core/missing.py:215:    for name, var in self.data_vars.items():\nxarray/core/rolling.py:639:        for key, da in self.obj.data_vars.items():\nxarray/core/rolling.py:657:        for key, da in self.obj.data_vars.items():\nxarray/core/rolling.py:769:        for key, da in self.obj.data_vars.items():\nxarray/core/rolling.py:1100:            for key, da in self.obj.data_vars.items():\nxarray/core/merge.py:454:            noncoord_names.update(mapping.data_vars)\nxarray/core/merge.py:570:def merge_data_and_coords(data_vars, coords, compat=\"broadcast_equals\", join=\"outer\"):\nxarray/core/merge.py:572:    indexes, coords = _create_indexes_from_coords(coords, data_vars)\nxarray/core/merge.py:573:    objects = [data_vars, coords]\nxarray/core/merge.py:584:def _create_indexes_from_coords(coords, data_vars=None):\nxarray/core/merge.py:590:    if data_vars is not None:\nxarray/core/merge.py:591:        all_variables.update(data_vars)\nxarray/core/common.py:548:        ...     data_vars=dict(\nxarray/core/common.py:1508:            fill_value = {k: fill_value for k in other.data_vars.keys()}\nxarray/core/common.py:1512:            dtype_ = {k: dtype for k in other.data_vars.keys()}\nxarray/core/common.py:1516:        data_vars = {\nxarray/core/common.py:1520:            for k, v in other.data_vars.items()\nxarray/core/common.py:1522:        return Dataset(data_vars, coords=other.coords, attrs=other.attrs)\nxarray/core/parallel.py:57:    elif kind == \"data_vars\":\nxarray/core/parallel.p",
+      "full_text_len": 10611,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:6",
+      "step_index": 6,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && git status --short && git log --oneline --all -- xarray/core/dataset.py | head -12 && sed -n '340,415p' xarray/core/dataset.py && python - <<'PY'\nimport xarray as xr\n# avoid repr while examining internal state\nbase = xr.Dataset(coords={'a': ('x',[1,2,3]), 'b': ('x',['a','b','c'])})\nresult = base.set_index(z=['a','b']).reset_index('z', drop=True)\nprint('variables', list(result._variables))\nprint('coords', result._coord_names)\nprint('iter', list(result.data_vars))\ntry: print('len', len(result.data_vars))\nexcept Exception as e: print(type(e).__name__, e)\nPY"
+      ],
+      "n_actions": 1,
+      "cost": 0.0016449999999999998,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:7",
+      "step_index": 7,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>1</returncode>\n<output>\n45c0a114 Raise UserWarning when rename creates a new dimension coord (#6999)\n77b9e8a9 Fill in missing docstrings for ndarray properties (#7090)\nf52b8750 Update merge docstrings (#7033)\nb018442c Add Ellipsis typehints (#7017)\n5bec4662 Improve quantile method docstring + error (#6939)\nba83f650 Fix bug where indexes were changed inplace (#6938)\n3f7cc2da DOC: link DataArray.expand_dims to Dataset.expand_dims (#6841)\n60f8c3d3 Pull xarray's nbytes from nbytes attribute on arrays (#6797)\n4a527996 Drop multi-indexes when assigning to a multi-indexed variable (#6798)\n392a6148 Update DataArray.rename + docu (#6665)\nf045401c Fix typos found by codespell (#6794)\n2736b285 Use `math` instead of `numpy`  in some places (#6765)\n    param_defaults = {p: 1 for p in params}\n    bounds_defaults = {p: (-np.inf, np.inf) for p in params}\n    for p in params:\n        if p in func_args and func_args[p].default is not func_args[p].empty:\n            param_defaults[p] = func_args[p].default\n        if p in bounds:\n            bounds_defaults[p] = tuple(bounds[p])\n            if param_defaults[p] < bounds[p][0] or param_defaults[p] > bounds[p][1]:\n                param_defaults[p] = _initialize_feasible(bounds[p][0], bounds[p][1])\n        if p in p0:\n            param_defaults[p] = p0[p]\n    return param_defaults, bounds_defaults\n\n\nclass DataVariables(Mapping[Any, \"DataArray\"]):\n    __slots__ = (\"_dataset\",)\n\n    def __init__(self, dataset: Dataset):\n        self._dataset = dataset\n\n    def __iter__(self) -> Iterator[Hashable]:\n        return (\n            key\n            for key in self._dataset._variables\n            if key not in self._dataset._coord_names\n        )\n\n    def __len__(self) -> int:\n        return len(self._dataset._variables) - len(self._dataset._coord_names)\n\n    def __contains__(self, key: Hashable) -> bool:\n        return key in self._dataset._variables and key not in self._dataset._coord_names\n\n    def __getitem__(self, key: Hashable) -",
+      "full_text_len": 3479,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 1,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:8",
+      "step_index": 8,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && git log --all --oneline -S'len(self._dataset._variables) - len(self._dataset._coord_names)' -- xarray/core/dataset.py && git branch -a --contains HEAD | head && grep -R \"sum(.*_coord_names\\|key not in .*_coord_names\" -n xarray/core | head -30"
+      ],
+      "n_actions": 1,
+      "cost": 0.0017573999999999999,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:9",
+      "step_index": 9,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\nc636f511 Fixing xray -> xarray\n* main\nxarray/core/dataset.py:364:            if key not in self._dataset._coord_names\nxarray/core/dataset.py:371:        return key in self._dataset._variables and key not in self._dataset._coord_names\nxarray/core/dataset.py:374:        if key not in self._dataset._coord_names:\nxarray/core/dataset.py:403:            if key not in self._dataset._coord_names\n</output>",
+      "full_text_len": 436,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:10",
+      "step_index": 10,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && python - <<'PY'\nfrom pathlib import Path\npath = Path('xarray/core/dataset.py')\ntext = path.read_text()\nold = '    def __len__(self) -> int:\\n        return len(self._dataset._variables) - len(self._dataset._coord_names)\\n'\nnew = '    def __len__(self) -> int:\\n        return sum(\\n            key not in self._dataset._coord_names for key in self._dataset._variables\\n        )\\n'\nif old not in text:\n    raise SystemExit('target text not found')\npath.write_text(text.replace(old, new, 1))\nPY\npython - <<'PY'\nimport xarray as xr\n\nbase = xr.Dataset(coords={\"a\": (\"x\", [1, 2, 3]), \"b\": (\"x\", ['a', 'b', 'c'])})\nresult = base.set_index(z=[\"a\", \"b\"]).reset_index(\"z\", drop=True)\nprint(result)\nprint('data vars:', list(result.data_vars), 'len:', len(result.data_vars))\nassert len(result.data_vars) == len(list(result.data_vars)) == 0\n\nfor ds in [xr.Dataset(), xr.Dataset({'v': ('x', [1, 2])}), base]:\n    assert len(ds.data_vars) == len(list(ds.data_vars))\n    print('ok:', list(ds.data_vars), len(ds.data_vars))\nPY\ngit diff -- xarray/core/dataset.py"
+      ],
+      "n_actions": 1,
+      "cost": 0.0022182,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:11",
+      "step_index": 11,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\n<xarray.Dataset>\nDimensions:  (z: 3)\nCoordinates:\n    a        (z) int64 1 2 3\n    b        (z) <U1 'a' 'b' 'c'\nData variables:\n    *empty*\ndata vars: [] len: 0\nok: [] 0\nok: ['v'] 1\nok: [] 0\ndiff --git a/xarray/core/dataset.py b/xarray/core/dataset.py\nindex 620f32f8..265b4e96 100644\n--- a/xarray/core/dataset.py\n+++ b/xarray/core/dataset.py\n@@ -365,7 +365,9 @@ class DataVariables(Mapping[Any, \"DataArray\"]):\n         )\n \n     def __len__(self) -> int:\n-        return len(self._dataset._variables) - len(self._dataset._coord_names)\n+        return sum(\n+            key not in self._dataset._coord_names for key in self._dataset._variables\n+        )\n \n     def __contains__(self, key: Hashable) -> bool:\n         return key in self._dataset._variables and key not in self._dataset._coord_names\n</output>",
+      "full_text_len": 842,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:12",
+      "step_index": 12,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && find . -maxdepth 2 -type d -name 'test*' -print && pytest -q xarray/tests/test_dataset.py -q --disable-warnings --maxfail=1 -k 'repr or data_vars' 2>&1 | tail -80"
+      ],
+      "n_actions": 1,
+      "cost": 0.0019052,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:13",
+      "step_index": 13,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\n./xarray/tests\n.....                                                                    [100%]\n</output>",
+      "full_text_len": 140,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:14",
+      "step_index": 14,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && pytest -q xarray/tests/test_dataset.py --disable-warnings --maxfail=1 && git status --short"
+      ],
+      "n_actions": 1,
+      "cost": 0.0018896,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:15",
+      "step_index": 15,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\n........................................................................ [ 19%]\n..................................xX.................................... [ 38%]\n........................................................................ [ 57%]\n........................................................................ [ 77%]\n........................................................................ [ 96%]\n..........s..                                                            [100%]\n370 passed, 1 skipped, 1 xfailed, 1 xpassed, 3 warnings in 28.75s\n M xarray/core/dataset.py\n</output>",
+      "full_text_len": 617,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:16",
+      "step_index": 16,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && git diff -- xarray/core/dataset.py > patch.txt"
+      ],
+      "n_actions": 1,
+      "cost": 0.0018013999999999999,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:17",
+      "step_index": 17,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\n</output>",
+      "full_text_len": 45,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:18",
+      "step_index": 18,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && cat patch.txt"
+      ],
+      "n_actions": 1,
+      "cost": 0.001691,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:19",
+      "step_index": 19,
+      "role": "tool",
+      "kind": "observation",
+      "text": "<returncode>0</returncode>\n<output>\ndiff --git a/xarray/core/dataset.py b/xarray/core/dataset.py\nindex 620f32f8..265b4e96 100644\n--- a/xarray/core/dataset.py\n+++ b/xarray/core/dataset.py\n@@ -365,7 +365,9 @@ class DataVariables(Mapping[Any, \"DataArray\"]):\n         )\n \n     def __len__(self) -> int:\n-        return len(self._dataset._variables) - len(self._dataset._coord_names)\n+        return sum(\n+            key not in self._dataset._coord_names for key in self._dataset._variables\n+        )\n \n     def __contains__(self, key: Hashable) -> bool:\n         return key in self._dataset._variables and key not in self._dataset._coord_names\n</output>",
+      "full_text_len": 651,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": 0,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:20",
+      "step_index": 20,
+      "role": "assistant",
+      "kind": "action",
+      "text": "null",
+      "full_text_len": null,
+      "actions": [
+        "cd /testbed && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt"
+      ],
+      "n_actions": 1,
+      "cost": 0.0018842,
+      "returncode": null,
+      "is_submission": false
+    },
+    {
+      "id": "pydata__xarray-6992:21",
+      "step_index": 21,
+      "role": "exit",
+      "kind": "exit",
+      "text": "diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py\nindex 620f32f8..265b4e96 100644\n--- a/xarray/core/dataset.py\n+++ b/xarray/core/dataset.py\n@@ -365,7 +365,9 @@ class DataVariables(Mapping[Any, \"DataArray\"]):\n         )\n \n     def __len__(self) -> int:\n-        return len(self._dataset._variables) - len(self._dataset._coord_names)\n+        return sum(\n+            key not in self._dataset._coord_names for key in self._dataset._variables\n+        )\n \n     def __contains__(self, key: Hashable) -> bool:\n         return key in self._dataset._variables and key not in self._dataset._coord_names\n",
+      "full_text_len": 606,
+      "actions": [],
+      "n_actions": 0,
+      "cost": 0.0,
+      "returncode": null,
+      "is_submission": true
+    }
+  ],
+  "edges": [
+    {
+      "source": "pydata__xarray-6992:0",
+      "target": "pydata__xarray-6992:1",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:1",
+      "target": "pydata__xarray-6992:2",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:2",
+      "target": "pydata__xarray-6992:3",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:3",
+      "target": "pydata__xarray-6992:4",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:4",
+      "target": "pydata__xarray-6992:5",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:5",
+      "target": "pydata__xarray-6992:6",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:6",
+      "target": "pydata__xarray-6992:7",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:7",
+      "target": "pydata__xarray-6992:8",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:8",
+      "target": "pydata__xarray-6992:9",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:9",
+      "target": "pydata__xarray-6992:10",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:10",
+      "target": "pydata__xarray-6992:11",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:11",
+      "target": "pydata__xarray-6992:12",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:12",
+      "target": "pydata__xarray-6992:13",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:13",
+      "target": "pydata__xarray-6992:14",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:14",
+      "target": "pydata__xarray-6992:15",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:15",
+      "target": "pydata__xarray-6992:16",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:16",
+      "target": "pydata__xarray-6992:17",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:17",
+      "target": "pydata__xarray-6992:18",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:18",
+      "target": "pydata__xarray-6992:19",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:19",
+      "target": "pydata__xarray-6992:20",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:20",
+      "target": "pydata__xarray-6992:21",
+      "type": "next"
+    },
+    {
+      "source": "pydata__xarray-6992:2",
+      "target": "pydata__xarray-6992:3",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:4",
+      "target": "pydata__xarray-6992:5",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:6",
+      "target": "pydata__xarray-6992:7",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:8",
+      "target": "pydata__xarray-6992:9",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:10",
+      "target": "pydata__xarray-6992:11",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:12",
+      "target": "pydata__xarray-6992:13",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:14",
+      "target": "pydata__xarray-6992:15",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:16",
+      "target": "pydata__xarray-6992:17",
+      "type": "acts_on"
+    },
+    {
+      "source": "pydata__xarray-6992:18",
+      "target": "pydata__xarray-6992:19",
+      "type": "acts_on"
+    }
+  ]
+}

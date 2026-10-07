@@ -1,0 +1,25 @@
+{
+  "viewer": "graph.html",
+  "instances": [
+    {
+      "instance_id": "astropy__astropy-14369",
+      "repo": "astropy/astropy",
+      "data": "data/astropy__astropy-14369.graph.json"
+    },
+    {
+      "instance_id": "django__django-14238",
+      "repo": "django/django",
+      "data": "data/django__django-14238.graph.json"
+    },
+    {
+      "instance_id": "pydata__xarray-6992",
+      "repo": "pydata/xarray",
+      "data": "data/pydata__xarray-6992.graph.json"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-13496",
+      "repo": "scikit-learn/scikit-learn",
+      "data": "data/scikit-learn__scikit-learn-13496.graph.json"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+    "total_instances": 4,
+    "submitted_instances": 4,
+    "completed_instances": 4,
+    "resolved_instances": 2,
+    "unresolved_instances": 2,
+    "infra_failure_instances": 0,
+    "ambiguous_failure_instances": 0,
+    "empty_patch_instances": 0,
+    "error_instances": 0,
+    "completed_ids": [
+        "astropy__astropy-14369",
+        "django__django-14238",
+        "pydata__xarray-6992",
+        "scikit-learn__scikit-learn-13496"
+    ],
+    "incomplete_ids": [],
+    "empty_patch_ids": [],
+    "submitted_ids": [
+        "astropy__astropy-14369",
+        "django__django-14238",
+        "pydata__xarray-6992",
+        "scikit-learn__scikit-learn-13496"
+    ],
+    "resolved_ids": [
+        "django__django-14238",
+        "scikit-learn__scikit-learn-13496"
+    ],
+    "unresolved_ids": [
+        "astropy__astropy-14369",
+        "pydata__xarray-6992"
+    ],
+    "infra_failure_ids": [],
+    "ambiguous_failure_ids": [],
+    "failure_reasons": {},
+    "error_ids": [],
+    "schema_version": 2,
+    "unstopped_instances": 0,
+    "unstopped_containers": [],
+    "unremoved_images": [
+        "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369:latest",
+        "swebench/sweb.eval.x86_64.django_1776_django-14238:latest",
+        "swebench/sweb.eval.x86_64.pydata_1776_xarray-6992:latest",
+        "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-13496:latest"
+    ]
+}

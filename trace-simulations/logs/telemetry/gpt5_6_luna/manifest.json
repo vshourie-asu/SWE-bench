@@ -1,0 +1,78 @@
+[
+  {
+    "instance_id": "astropy__astropy-14369",
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "exit_status": "Submitted",
+    "has_submission": true,
+    "resolved": null,
+    "n_steps": 28,
+    "n_actions": 12,
+    "api_calls": 14,
+    "instance_cost": 0.0535394,
+    "mini_version": "2.4.6",
+    "trajectory_format": "mini-swe-agent-1.1",
+    "source_trajectory": "trace-simulations\\logs\\preds\\gpt5_6_luna\\astropy__astropy-14369\\astropy__astropy-14369.traj.json",
+    "artifacts": {
+      "events": "astropy__astropy-14369/events.jsonl",
+      "graph_json": "astropy__astropy-14369/graph.json",
+      "graphml": "astropy__astropy-14369/graph.graphml"
+    }
+  },
+  {
+    "instance_id": "django__django-14238",
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "exit_status": "Submitted",
+    "has_submission": true,
+    "resolved": null,
+    "n_steps": 24,
+    "n_actions": 12,
+    "api_calls": 10,
+    "instance_cost": 0.015948399999999998,
+    "mini_version": "2.4.6",
+    "trajectory_format": "mini-swe-agent-1.1",
+    "source_trajectory": "trace-simulations\\logs\\preds\\gpt5_6_luna\\django__django-14238\\django__django-14238.traj.json",
+    "artifacts": {
+      "events": "django__django-14238/events.jsonl",
+      "graph_json": "django__django-14238/graph.json",
+      "graphml": "django__django-14238/graph.graphml"
+    }
+  },
+  {
+    "instance_id": "pydata__xarray-6992",
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "exit_status": "Submitted",
+    "has_submission": true,
+    "resolved": null,
+    "n_steps": 22,
+    "n_actions": 10,
+    "api_calls": 10,
+    "instance_cost": 0.016315,
+    "mini_version": "2.4.6",
+    "trajectory_format": "mini-swe-agent-1.1",
+    "source_trajectory": "trace-simulations\\logs\\preds\\gpt5_6_luna\\pydata__xarray-6992\\pydata__xarray-6992.traj.json",
+    "artifacts": {
+      "events": "pydata__xarray-6992/events.jsonl",
+      "graph_json": "pydata__xarray-6992/graph.json",
+      "graphml": "pydata__xarray-6992/graph.graphml"
+    }
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-13496",
+    "model_name_or_path": "openai/openai/gpt5_6_luna",
+    "exit_status": "Submitted",
+    "has_submission": true,
+    "resolved": null,
+    "n_steps": 30,
+    "n_actions": 16,
+    "api_calls": 12,
+    "instance_cost": 0.0246504,
+    "mini_version": "2.4.6",
+    "trajectory_format": "mini-swe-agent-1.1",
+    "source_trajectory": "trace-simulations\\logs\\preds\\gpt5_6_luna\\scikit-learn__scikit-learn-13496\\scikit-learn__scikit-learn-13496.traj.json",
+    "artifacts": {
+      "events": "scikit-learn__scikit-learn-13496/events.jsonl",
+      "graph_json": "scikit-learn__scikit-learn-13496/graph.json",
+      "graphml": "scikit-learn__scikit-learn-13496/graph.graphml"
+    }
+  }
+]

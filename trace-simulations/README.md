@@ -630,3 +630,181 @@ python trace-simulations/build_telemetry.py --preds trace-simulations/logs/preds
 # re-grade saved logs without rebuilding containers
 swebench report createai-gpt5_6_luna -d verified
 ```
+
+---
+
+## 9. Visualize the agent's code changes (change-graph tooling)
+
+Steps 1–8 give raters the issue, the patch, and the agentic telemetry. The **change-graph
+tooling** adds the missing piece: a way to *see where the agent's changes land in the
+code structure*, side by side with the gold fix and the test changes, at every level —
+directory, module, class, and function — each annotated with a plain-language summary.
+
+Instead of a flat file tree you click through blindly, this is a progressive, multi-level
+**node-link graph**. It stays mostly collapsed and expands on demand along changed paths
+only: directory → module (with its imports and module-level constants) → class →
+function/method. Changes are highlighted at every level, and per-level LLM summaries are
+generated **only along the changed paths**, so you understand what changed in each
+directory, module, class, and function without reading raw diffs.
+
+This is a **prototype scoped to one instance**: `scikit-learn__scikit-learn-13496`. The
+`--instance` flag accepts other IDs so the same entrypoint can build the rest later.
+Symbol extraction is **Python-only** (standard-library `ast`); non-Python files degrade to
+plain file nodes.
+
+Like the old viewer, this part needs **no Docker**. It clones the repo at its base commit
+with plain `git`, parses each Python file into its symbols, overlays the three patch
+layers (model / gold / test), and renders everything in a self-contained static viewer.
+
+### What it is
+
+- **`build_graph.py`** — the orchestrator. For the target instance it runs the components
+  in order and writes the per-task outputs plus the viewer's data files.
+- **`viz/` package** — the components, each independently runnable for debugging:
+  - `extract.py` *(reused)* — reads SWE-bench Verified and writes
+    `base-commits/<id>/metadata.json` (repo + base_commit + environment_setup_commit +
+    problem_statement) per task.
+  - `clone.py` *(reused)* — clones the repo into a shared cache and checks out the base commit.
+  - `diffparse.py` *(reused)* — parses the model/gold/test unified diffs into per-file
+    hunks with line numbers.
+  - `summarize.py` *(reused)* — the CreateAI endpoint call with secret hygiene and fallback.
+  - `structure.py` *(new)* — parses each Python file with `ast` into a symbol hierarchy
+    (module → imports / consts / classes → methods / functions) with line ranges.
+  - `graphbuild.py` *(new)* — assembles the directory → module → symbol node hierarchy,
+    maps each changed line onto the innermost containing symbol per layer, and propagates
+    `changed` flags up to the root.
+  - `levelsummary.py` *(new)* — walks only the changed paths and summarizes bottom-up,
+    rolling child summaries up into module/dir summaries.
+- **`viz/graph.html`** *(new)* — the graph viewer: vanilla JS + inline CSS + SVG, no build
+  step, no CDN. (Replaces the old file-tree viewer.)
+
+### What it produces
+
+```
+trace-simulations/
+├── base-commits/
+│   └── <instance_id>/
+│       ├── metadata.json              # repo + base_commit per task (no Docker needed)
+│       └── graph_data.json            # canonical Graph_Document (hierarchy + annotations + summaries)
+└── viz/
+    ├── data/
+    │   └── <instance_id>.graph.json   # copy served to the viewer via relative fetch
+    ├── manifest.json                  # lists built instances + points at the graph viewer
+    └── graph.html                     # the viewer
+```
+
+`metadata.json` is the stable per-task record of where the agent started — repo and
+`base_commit` straight from the dataset, so you can locate the exact starting point of
+each task **without** building a Docker image. `graph_data.json` carries the multi-level
+node hierarchy and, for changed nodes, the per-layer change annotations, summaries, and
+(on directly changed class/function nodes) the base-commit source lines.
+
+> **Base-commit extraction is still a standalone capability.** Even if you never build the
+> graph, `extract.py` + `base-commits/<id>/metadata.json` give you repo + base_commit per
+> task without Docker.
+
+### Environment
+
+Run everything in the **`trace-sims`** conda env (same one used by `pick_instances.py`
+and `build_telemetry.py`; see the top of this README). It needs `datasets` to read the
+Verified split, and **`git` must be on your `PATH`** (Git for Windows provides it). All
+commands below are PowerShell, run from the **repo root**.
+
+> **Disk use.** `build_graph.py` does **full** clones (an arbitrary base-commit SHA isn't
+> reachable from a shallow clone) into `trace-simulations/.repo-cache/`, which is
+> **gitignored**. Expect a few GB for scikit-learn's history. Clones are **keyed by repo,
+> not task**, so a repo shared by two tasks is cloned once and only re-checked-out — the
+> cache is reused across tasks and across runs.
+
+### Credentials (CreateAI, same `.env` as step 1)
+
+The per-level summaries call the CreateAI OpenAI-compatible endpoint, reusing the `.env`
+you set up in step 1: `OPENAI_API_BASE` and `OPENAI_API_KEY` in the **repo root**.
+
+> **Model name — important, different from the inference steps.** This pipeline calls the
+> gateway **directly** via `urllib` (not through litellm), so the model name is the
+> gateway's provider-path form with a **single** `openai/` prefix: `openai/gpt5_6_luna`.
+> This is the **default**. The litellm double-prefix form `openai/openai/gpt5_6_luna`
+> (used in steps 1 and 5) is **not** used here — the gateway rejects it.
+
+If the endpoint or token is unavailable, summarization **falls back gracefully**: affected
+nodes get a templated summary and processing continues — no run is aborted by a missing
+credential or a down endpoint. A top-level `generated_with_llm` flag records whether the
+summaries are real or fallbacks.
+
+> **Secret hygiene.** The token is read from `.env` (already gitignored) only into the
+> request header. It is **never** written into `graph_data.json`, `metadata.json`,
+> `manifest.json`, or any other committed artifact, and fallback messages reference
+> failures by exception type, not by credential value.
+
+### Build it
+
+```powershell
+# full build, with per-level LLM summaries along the changed paths (uses .env)
+python trace-simulations/build_graph.py
+
+# skip the LLM entirely and use deterministic templated fallback summaries
+python trace-simulations/build_graph.py --no-summaries
+
+# override the summary model (this value is also the default)
+python trace-simulations/build_graph.py --summary-model openai/gpt5_6_luna
+```
+
+Key flags (all optional):
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--instance` | `scikit-learn__scikit-learn-13496` | Which instance to build. The prototype targets this one; other IDs build later. |
+| `--preds` | `trace-simulations/logs/preds/gpt5_6_luna/preds.json` | Predictions file holding the task's `model_patch`. |
+| `--out` | `trace-simulations/base-commits` | Where `base-commits/<id>/{metadata,graph_data}.json` are written. |
+| `--viz-root` | `trace-simulations/viz` | Viewer root; `data/` copies and `manifest.json` land here. |
+| `--cache` | `trace-simulations/.repo-cache` | Shared clone cache (gitignored). |
+| `--env` | `.env` | Repo-root `.env` with the CreateAI credentials. |
+| `--summary-model` | `openai/gpt5_6_luna` | Gateway model string for summaries (**single** `openai/` prefix). |
+| `--no-summaries` | *(off)* | Skip the LLM step; write templated fallback summaries only. |
+
+### View it
+
+The viewer fetches its data at runtime, and browsers block `fetch()` under the `file://`
+origin — so **opening `graph.html` directly will not work**. You must serve it over HTTP:
+
+```powershell
+# from trace-simulations/viz/
+python -m http.server
+```
+
+Then open **http://localhost:8000/graph.html**. The viewer renders the full node-link
+graph with unchanged subtrees **collapsed by default** and the changed paths
+**pre-expanded** down to the directly changed nodes. Click a node to expand it one more
+level (click again to collapse). Each node's highlighting encodes whether it's directly
+changed or an ancestor of a change, with per-layer (model / gold / test) accents, a
+legend, and layer toggles. Selecting a node opens a detail pane showing its summary, its
+per-layer diff hunks (added / removed / context distinguished), and — for class/function
+nodes — the base-commit source lines for context next to the diff.
+
+### Outputs / schema at a glance
+
+- `base-commits/<id>/metadata.json` — `instance_id`, `repo`, `base_commit`,
+  `environment_setup_commit`, `problem_statement`. The quickest way to get repo +
+  base commit per task **without Docker**.
+- `base-commits/<id>/graph_data.json` — the `Graph_Document`:
+  `{ instance_id, repo, base_commit, generated_with_llm, layers, root }`. The `root` is a
+  nested node hierarchy; each node has a `kind` (`dir` / `module` / `import` / `const` /
+  `class` / `function`), a `change_state` (`none` / `ancestor` / `direct`), a per-layer
+  `annotations` object (`added` / `removed`, plus `hunks` on directly changed nodes), a
+  `summary` on nodes along a changed path, and a `source` string on directly changed
+  class/function nodes. `generated_with_llm` records whether real summaries or fallbacks
+  were used.
+- `viz/data/<id>.graph.json` — the copy the viewer fetches over HTTP.
+- `viz/manifest.json` — the list of built instances and the graph viewer the page loads.
+
+### Troubleshooting (change-graph)
+
+| Symptom | Fix |
+| --- | --- |
+| Viewer shows nothing / console `fetch` CORS error | You opened `graph.html` as a `file://` URL. Serve it: `python -m http.server` from `trace-simulations/viz/`, then open `http://localhost:8000/graph.html`. |
+| `'git' is not recognized` | `git` isn't on `PATH`. Install Git for Windows (or activate an env that provides it) and reopen the shell. |
+| Summaries look templated (e.g. `+N / −M across …`) | The LLM fallback kicked in — endpoint/token unavailable, or you passed `--no-summaries`. Check `.env` (step 1), and confirm the model is the **single**-prefix `openai/gpt5_6_luna`. |
+| Gateway rejects the model name | This pipeline calls the gateway directly, so use the single-prefix `openai/gpt5_6_luna`, **not** litellm's double-prefix `openai/openai/gpt5_6_luna`. |
+| `.repo-cache/` is huge | Expected: a full clone of scikit-learn's history. It's gitignored; delete it to reclaim space (it re-clones on next run). |
+| `datasets` import error | Activate the `trace-sims` env first (`conda activate trace-sims`). |

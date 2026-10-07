@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<!--
+  SWE-bench Multi-Level Change Graph Viewer (graph.html)
+  =====================================================
+  Single self-contained static viewer. Inline CSS + vanilla JavaScript, SVG
+  rendering. NO external packages, build tooling, or CDN resources.
+
+  IMPORTANT — file:// limitation:
+  ------------------------------------------
+  This page uses fetch() to load manifest.json and data/<id>.graph.json. Browsers
+  block fetch() of local files when the page itself is opened via a file:// URL
+  (the CORS "Origin: null" rule). Opening graph.html by double-clicking it will
+  therefore show an empty graph and a load error.
+
+  Serve the folder over HTTP instead. From trace-simulations/viz/ run (Windows/PowerShell):
+
+      python -m http.server 8000
+
+  then open  http://localhost:8000/graph.html
+
+  Interaction notes:
+    - Unchanged siblings at each level are folded into one "N unchanged" group
+      node; click it to reveal those siblings in place (same hierarchy level).
+    - Pan the graph by dragging an empty area of the canvas, with the mouse wheel
+      (Shift = horizontal), or with the arrow keys when the canvas is focused.
+    - Drag the divider between the graph and the detail pane to resize the pane.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SWE-bench Change Graph</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #2b313c;
+    --text: #e6e9ef;
+    --muted: #9aa4b2;
+    --focus: #ffcc33;
+
+    --neutral-fill: #232833;
+    --neutral-stroke: #3a4150;
+    --group-fill: #1b2330;
+    --group-stroke: #3b4a63;
+
+    --accent: #6ea8fe;
+
+    --model: #4ade80;
+    --gold:  #f0b429;
+    --test:  #c084fc;
+
+    --add: #2ea043;
+    --remove: #f85149;
+
+    --detail-w: 420px;   /* live detail-pane width, updated by the resizer */
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    font-size: 14px;
+  }
+
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  header .meta code { color: var(--text); }
+
+  .controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-left: auto; }
+  .controls label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  select, button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .legend { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  .swatch.direct   { background: var(--accent); border: 1px solid var(--accent); }
+  .swatch.ancestor { background: transparent; border: 2px solid var(--accent); }
+  .swatch.none     { background: var(--neutral-fill); border: 1px solid var(--neutral-stroke); }
+  .swatch.group    { background: var(--group-fill); border: 1px dashed var(--group-stroke); }
+  .swatch.model { background: var(--model); }
+  .swatch.gold  { background: var(--gold); }
+  .swatch.test  { background: var(--test); }
+
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  #graphWrap {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: auto;              /* native scrollbars both axes */
+    background:
+      radial-gradient(circle at 1px 1px, #1b1f27 1px, transparent 0) 0 0 / 24px 24px,
+      var(--bg);
+    scrollbar-width: thin;       /* firefox */
+    scrollbar-color: #39414f var(--bg);
+    cursor: grab;
+    outline: none;
+  }
+  #graphWrap.panning { cursor: grabbing; }
+  /* chunkier webkit scrollbars so both axes are easy to grab */
+  #graphWrap::-webkit-scrollbar { width: 14px; height: 14px; }
+  #graphWrap::-webkit-scrollbar-thumb {
+    background: #39414f; border-radius: 7px; border: 3px solid var(--bg);
+  }
+  #graphWrap::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+  #graphWrap::-webkit-scrollbar-corner { background: var(--bg); }
+  #graph { display: block; }
+
+  /* scroll affordance hint, bottom-left of the canvas */
+  .scrollhint {
+    position: absolute; left: 10px; bottom: 8px; z-index: 5;
+    background: rgba(23,26,33,.85); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted); font-size: 11px; padding: 4px 8px; pointer-events: none;
+    max-width: 60%;
+  }
+
+  /* resizer gutter between the graph and the detail pane */
+  #resizer {
+    flex: 0 0 6px;
+    cursor: col-resize;
+    background: var(--border);
+    position: relative;
+  }
+  #resizer::before {
+    content: ""; position: absolute; inset: 0 -3px; /* fatter hit area */
+  }
+  #resizer:hover, #resizer.dragging { background: var(--accent); }
+  body.col-resizing { cursor: col-resize; user-select: none; }
+
+  /* nodes */
+  .node { cursor: pointer; }
+  .node:focus { outline: none; }
+  .node .box {
+    rx: 7; ry: 7;
+    stroke-width: 1.5;
+    fill: var(--neutral-fill);
+    stroke: var(--neutral-stroke);
+  }
+  .node.state-ancestor .box { fill: transparent; stroke: var(--accent); stroke-width: 2; }
+  .node.state-direct   .box { fill: var(--accent); stroke: var(--accent); fill-opacity: .22; stroke-width: 2.5; }
+  .node.state-group .box { fill: var(--group-fill); stroke: var(--group-stroke); stroke-dasharray: 5 3; }
+  .node.state-group.group-open .box { fill: var(--panel-2); fill-opacity: .7; }
+  .node.selected .box  { stroke: var(--focus); stroke-width: 3; }
+  .node:focus-visible .box { stroke: var(--focus); stroke-width: 3; }
+
+  .node .kindlabel { fill: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; }
+  .node .namelabel { fill: var(--text); font-size: 13px; font-weight: 500; }
+  .node .grouplabel { fill: var(--muted); font-size: 12px; font-style: italic; }
+  .node .badge { fill: var(--muted); font-size: 10.5px; }
+  .node .adds { fill: var(--add); font-size: 10.5px; font-weight: 600; }
+  .node .removes { fill: var(--remove); font-size: 10.5px; font-weight: 600; }
+  .node .countbadge { fill: var(--panel-2); stroke: var(--border); }
+  .node .countbadge-text { fill: var(--text); font-size: 10px; text-anchor: middle; }
+  .node .changedmark { fill: var(--accent); font-size: 12px; font-weight: 700; }
+  .node .expander { fill: var(--muted); font-size: 13px; font-weight: 700; text-anchor: middle; }
+
+  .link { fill: none; stroke: var(--border); stroke-width: 1.5; }
+  .link.on-changed { stroke: var(--accent); stroke-opacity: .55; }
+  .link.to-group { stroke-dasharray: 5 3; stroke-opacity: .4; }
+
+  .chip-model { fill: var(--model); }
+  .chip-gold  { fill: var(--gold); }
+  .chip-test  { fill: var(--test); }
+
+  /* detail pane */
+  #detail {
+    flex: 0 0 var(--detail-w);
+    width: var(--detail-w);
+    min-width: 240px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow: auto;
+    padding: 16px;
+  }
+  #detail h2 { font-size: 15px; margin: 0 0 2px; }
+  #detail .path { color: var(--muted); font-size: 12px; word-break: break-all; margin-bottom: 10px; }
+  #detail .kindtag {
+    display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1px 8px; margin-right: 6px; color: var(--muted);
+  }
+  #detail .statetag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+    border-radius: 10px; padding: 1px 8px; }
+  #detail .statetag.direct { background: rgba(110,168,254,.25); border: 1px solid var(--accent); color: var(--accent); }
+  #detail .statetag.ancestor { border: 1px solid var(--accent); color: var(--accent); }
+  #detail .statetag.none { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+
+  #detail section { margin-top: 16px; }
+  #detail section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 0 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  #detail .summary { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; line-height: 1.5; }
+  #detail .empty { color: var(--muted); font-style: italic; }
+
+  .counts-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .counts-table th, .counts-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .counts-table .add { color: var(--add); }
+  .counts-table .rm { color: var(--remove); }
+  .layer-dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align: middle; }
+
+  .layer-block { margin-bottom: 14px; }
+  .layer-block > .layer-head { font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+
+  /* aggregated-diff grouping shown on ancestor nodes */
+  .leaf-diff { margin: 0 0 16px; padding: 10px; border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 6px; background: rgba(110,168,254,.05); }
+  .leaf-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .leaf-path { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: var(--text); word-break: break-all; }
+
+  pre.code, pre.diff {
+    margin: 0; padding: 0; overflow-x: auto;
+    background: #0c0e12; border: 1px solid var(--border); border-radius: 6px;
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.45;
+  }
+  .diff .row { display: grid; grid-template-columns: 46px 46px 1fr; white-space: pre; }
+  .diff .ln { color: #5b6472; text-align: right; padding: 0 6px; user-select: none; }
+  .diff .content { padding: 0 8px; }
+  .diff .row.add { background: rgba(46,160,67,.16); }
+  .diff .row.add .content::before { content: "+ "; color: var(--add); }
+  .diff .row.remove { background: rgba(248,81,73,.16); }
+  .diff .row.remove .content::before { content: "- "; color: var(--remove); }
+  .diff .row.context .content::before { content: "\00a0\00a0"; }
+  .diff .hunk-header { color: var(--accent); padding: 2px 8px; background: var(--panel-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); white-space: pre; }
+
+  pre.code .srcln { display: grid; grid-template-columns: 48px 1fr; white-space: pre; }
+  pre.code .srcln .ln { color: #5b6472; text-align: right; padding: 0 6px; user-select: none; }
+  pre.code .srcln .content { padding: 0 8px; }
+
+  #banner {
+    display: none;
+    background: #3a2016; color: #ffd9b0; border-bottom: 1px solid #5a3420;
+    padding: 10px 16px; font-size: 13px; line-height: 1.5;
+  }
+  #banner code { background: rgba(0,0,0,.3); padding: 1px 5px; border-radius: 4px; }
+  #banner.show { display: block; }
+
+  .hint { color: var(--muted); font-size: 11.5px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>SWE-bench Change Graph</h1>
+      <div class="meta" id="metaLine">Loading…</div>
+    </div>
+
+    <div class="controls" role="group" aria-label="Viewer controls">
+      <label for="instanceSelect" id="instanceSelectLabel" style="display:none;">
+        Instance
+        <select id="instanceSelect" aria-label="Select instance"></select>
+      </label>
+
+      <div class="legend" aria-label="Legend">
+        <span class="item"><span class="swatch direct"></span> direct</span>
+        <span class="item"><span class="swatch ancestor"></span> ancestor</span>
+        <span class="item"><span class="swatch none"></span> unchanged</span>
+        <span class="item"><span class="swatch group"></span> unchanged group</span>
+      </div>
+
+      <div class="legend" role="group" aria-label="Layer toggles">
+        <label><input type="checkbox" id="toggle-model" checked /> <span class="swatch model"></span> model</label>
+        <label><input type="checkbox" id="toggle-gold" checked /> <span class="swatch gold"></span> gold</label>
+        <label><input type="checkbox" id="toggle-test" checked /> <span class="swatch test"></span> test</label>
+      </div>
+
+      <button id="resetBtn" type="button" title="Collapse the graph back to its minimum state (root only)">Reset view</button>
+      <button id="expandAllChanged" type="button" title="Expand every node that is on a changed path">Expand changed</button>
+    </div>
+  </header>
+
+  <div id="banner" role="alert"></div>
+
+  <main>
+    <div id="graphWrap" tabindex="0" aria-label="Change graph. Drag to pan, mouse wheel to scroll (Shift for horizontal), arrow keys to pan when focused. Tab to move between nodes, Enter or Space to expand or collapse, click to view details.">
+      <svg id="graph" role="group" aria-label="Node-link change graph" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="scrollhint" id="scrollHint">Drag to pan · wheel to scroll · Shift+wheel = horizontal</div>
+    </div>
+
+    <div id="resizer" role="separator" aria-orientation="vertical" tabindex="0"
+         aria-label="Resize detail pane. Drag, or use left and right arrow keys."></div>
+
+    <aside id="detail" aria-live="polite">
+      <p class="empty">Select a node to see its summary, changes, and diff.</p>
+    </aside>
+  </main>
+
+<script>
+"use strict";
+(function () {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const LAYERS = ["model", "gold", "test"];
+  const LAYER_CLASS = { model: "chip-model", gold: "chip-gold", test: "chip-test" };
+
+  // layout metrics
+  const COL_W = 230;
+  const NODE_W = 190;
+  const NODE_H = 46;
+  const ROW_H = 64;
+  const PAD_X = 30;
+  const PAD_Y = 30;
+
+  // detail-pane width bounds (px)
+  const DETAIL_MIN = 240;
+  const DETAIL_MAX_FRAC = 0.75;   // never exceed this fraction of the window
+
+  // state
+  let doc = null;
+  let root = null;
+  const expanded = new Set();        // ids of real nodes whose children are revealed
+  const groupsExpanded = new Set();  // parent ids whose "unchanged" group is revealed
+  let selectedId = null;
+  const layerVisible = { model: true, gold: true, test: true };
+  const nodesById = new Map();
+
+  // dom
+  const svg = document.getElementById("graph");
+  const graphWrap = document.getElementById("graphWrap");
+  const detail = document.getElementById("detail");
+  const resizer = document.getElementById("resizer");
+  const banner = document.getElementById("banner");
+  const metaLine = document.getElementById("metaLine");
+  const instanceSelect = document.getElementById("instanceSelect");
+  const instanceSelectLabel = document.getElementById("instanceSelectLabel");
+
+  function showBanner(html) { banner.innerHTML = html; banner.classList.add("show"); }
+
+  // utilities
+  function el(tag, attrs, text) {
+    const n = document.createElementNS(SVGNS, tag);
+    if (attrs) for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function hesc(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function hasChildren(n) { return n.children && n.children.length > 0; }
+  function isChanged(n) { return (n.change_state || "none") !== "none"; }
+
+  function indexNodes(n, parent, idx) {
+    if (!n.id) n.id = (parent ? parent.id : "") + "/" + (n.kind || "node") + ":" + (n.name || idx);
+    n.__parent = parent || null;
+    nodesById.set(n.id, n);
+    (n.children || []).forEach((c, i) => indexNodes(c, n, i));
+  }
+
+  function activeLayers(n) {
+    if (!n.annotations) return [];
+    return LAYERS.filter(l => n.annotations[l] && layerVisible[l]);
+  }
+  function visibleCounts(n) {
+    let added = 0, removed = 0;
+    if (n.annotations) for (const l of LAYERS) {
+      if (layerVisible[l] && n.annotations[l]) {
+        added += n.annotations[l].added || 0;
+        removed += n.annotations[l].removed || 0;
+      }
+    }
+    return { added, removed };
+  }
+
+  // ---- initial expansion set: every node on a changed path (root -> direct) --
+  function hasDirectDescendant(n) {
+    if (n.change_state === "direct") return true;
+    return (n.children || []).some(hasDirectDescendant);
+  }
+  // Minimum state: only the root is expanded (its immediate children are shown,
+  // everything deeper stays collapsed). The user drills in from there. Both the
+  // initial load and the "Reset view" button use this.
+  function computeInitialExpansion(n) {
+    expanded.add(root.id);
+  }
+
+  function expandAllChanged() {
+    nodesById.forEach(n => {
+      if (hasChildren(n) && isChanged(n) &&
+          (n.children || []).some(c => c.change_state !== "none"))
+        expanded.add(n.id);
+    });
+    layout();
+  }
+
+  // ---- children partitioning: changed shown individually, unchanged folded ---
+  // Returns the list of *visible* child render-items for an expanded parent:
+  //   - every changed child (as a real node)
+  //   - if the unchanged group for this parent is expanded, every unchanged child
+  //   - otherwise a single synthetic group node standing in for the unchanged set
+  function visibleChildItems(n) {
+    const kids = n.children || [];
+    const changedKids = kids.filter(isChanged);
+    const unchangedKids = kids.filter(c => !isChanged(c));
+    const items = changedKids.slice();
+
+    if (unchangedKids.length === 0) return items;
+
+    if (groupsExpanded.has(n.id)) {
+      // Keep a collapsible group header so the revealed unchanged siblings can be
+      // folded back, then show the unchanged children in place at this level.
+      items.push(makeGroupNode(n, unchangedKids, true));
+      for (const c of unchangedKids) items.push(c);
+    } else {
+      items.push(makeGroupNode(n, unchangedKids, false));
+    }
+    return items;
+  }
+
+  function makeGroupNode(parent, unchangedKids, isOpen) {
+    const count = unchangedKids.length;
+    const noun = "unchanged item" + (count === 1 ? "" : "s");
+    return {
+      __group: true,
+      __groupOpen: isOpen,
+      __parent: parent,
+      __members: unchangedKids,
+      id: "__group__:" + parent.id,
+      kind: "unchanged-group",
+      change_state: "group",
+      name: isOpen
+        ? ("hide " + count + " " + noun)
+        : (count + " " + noun),
+      children: [],
+    };
+  }
+
+  // ---- layout: tidy tree over visible nodes only ---------------------------
+  let rowCursor = 0;
+  function layoutNode(n, depth, laidOut) {
+    n.__x = PAD_X + depth * COL_W;
+    const isOpen = !n.__group && expanded.has(n.id) && hasChildren(n);
+    if (isOpen) {
+      const items = visibleChildItems(n);
+      if (items.length === 0) {
+        n.__y = PAD_Y + rowCursor * ROW_H + NODE_H / 2;
+        rowCursor += 1;
+      } else {
+        let first = null, last = null;
+        n.__renderChildren = items;
+        for (const c of items) {
+          layoutNode(c, depth + 1, laidOut);
+          if (first === null) first = c.__y;
+          last = c.__y;
+        }
+        n.__y = (first + last) / 2;
+      }
+    } else {
+      n.__renderChildren = null;
+      n.__y = PAD_Y + rowCursor * ROW_H + NODE_H / 2;
+      rowCursor += 1;
+    }
+    laidOut.push(n);
+  }
+
+  function layout() {
+    rowCursor = 0;
+    const laidOut = [];
+    layoutNode(root, 0, laidOut);
+
+    let maxX = 0, maxY = 0;
+    for (const n of laidOut) {
+      maxX = Math.max(maxX, n.__x + NODE_W);
+      maxY = Math.max(maxY, n.__y + NODE_H / 2);
+    }
+    const width = maxX + PAD_X;
+    const height = maxY + PAD_Y;
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+
+    render(laidOut);
+  }
+
+  // ---- render --------------------------------------------------------------
+  function render(laidOut) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const linkLayer = el("g", { "class": "links" });
+    const nodeLayer = el("g", { "class": "nodes" });
+    svg.appendChild(linkLayer);
+    svg.appendChild(nodeLayer);
+
+    for (const n of laidOut) {
+      const items = n.__renderChildren;
+      if (items) {
+        for (const c of items) {
+          if (c.__x == null) continue;
+          const x1 = n.__x + NODE_W, y1 = n.__y;
+          const x2 = c.__x, y2 = c.__y;
+          const mx = (x1 + x2) / 2;
+          const d = "M" + x1 + "," + y1 + " C" + mx + "," + y1 + " " + mx + "," + y2 + " " + x2 + "," + y2;
+          let cls = "link";
+          if (c.__group) cls += " to-group";
+          else if (isChanged(n) && isChanged(c)) cls += " on-changed";
+          linkLayer.appendChild(el("path", { "class": cls, d }));
+        }
+      }
+    }
+
+    for (const n of laidOut) nodeLayer.appendChild(renderNode(n));
+  }
+
+  function renderNode(n) {
+    if (n.__group) return renderGroupNode(n);
+
+    const g = el("g", {
+      "class": "node state-" + (n.change_state || "none") + (n.id === selectedId ? " selected" : ""),
+      "transform": "translate(" + n.__x + "," + (n.__y - NODE_H / 2) + ")",
+      "tabindex": "0",
+      "role": "treeitem",
+      "data-id": n.id,
+    });
+    g.setAttribute("aria-label", ariaForNode(n));
+    if (hasChildren(n)) g.setAttribute("aria-expanded", expanded.has(n.id) ? "true" : "false");
+
+    g.appendChild(el("rect", { "class": "box", width: NODE_W, height: NODE_H }));
+    g.appendChild(el("text", { "class": "kindlabel", x: 12, y: 15 }, (n.kind || "").toUpperCase()));
+
+    const name = n.name && n.name.length ? n.name : (n.kind === "dir" ? "/ (root)" : "(unnamed)");
+    g.appendChild(el("text", { "class": "namelabel", x: 12, y: 32 }, truncate(name, 22)));
+
+    const counts = visibleCounts(n);
+    if (n.change_state === "direct" || n.change_state === "ancestor") {
+      g.appendChild(el("text", { "class": "changedmark", x: NODE_W - 14, y: 15 },
+        n.change_state === "direct" ? "\u25C6" : "\u25C7"));
+
+      const act = activeLayers(n);
+      act.forEach((l, i) => {
+        g.appendChild(el("rect", { "class": LAYER_CLASS[l], x: 12 + i * 14, y: NODE_H - 10, width: 10, height: 5, rx: 1 }));
+      });
+
+      if (counts.added) g.appendChild(el("text", { "class": "adds", x: NODE_W - 14, y: NODE_H - 6, "text-anchor": "end" }, "+" + counts.added));
+      if (counts.removed) g.appendChild(el("text", { "class": "removes", x: NODE_W - (counts.added ? 42 : 14), y: NODE_H - 6, "text-anchor": "end" }, "\u2212" + counts.removed));
+    }
+
+    if (hasChildren(n)) {
+      const open = expanded.has(n.id);
+      g.appendChild(el("text", { "class": "expander", x: NODE_W - 14, y: 32 }, open ? "\u2212" : "+"));
+      if (!open) {
+        g.appendChild(el("circle", { "class": "countbadge", cx: NODE_W - 32, cy: 28, r: 10 }));
+        g.appendChild(el("text", { "class": "countbadge-text", x: NODE_W - 32, y: 31 }, String(n.children.length)));
+      }
+    }
+
+    g.addEventListener("click", (e) => { e.stopPropagation(); onActivate(n, g); });
+    g.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); onActivate(n, g); }
+    });
+    return g;
+  }
+
+  function renderGroupNode(n) {
+    const open = !!n.__groupOpen;
+    const g = el("g", {
+      "class": "node state-group" + (open ? " group-open" : ""),
+      "transform": "translate(" + n.__x + "," + (n.__y - NODE_H / 2) + ")",
+      "tabindex": "0",
+      "role": "treeitem",
+      "data-id": n.id,
+      "aria-expanded": open ? "true" : "false",
+    });
+    g.setAttribute("aria-label", open
+      ? ("Expanded group of " + n.__members.length + " unchanged items. Activate to collapse them.")
+      : ("Collapsed group of " + n.__members.length + " unchanged items. Activate to reveal them at this level."));
+
+    g.appendChild(el("rect", { "class": "box", width: NODE_W, height: NODE_H }));
+    g.appendChild(el("text", { "class": "kindlabel", x: 12, y: 15 }, "UNCHANGED"));
+    g.appendChild(el("text", { "class": "grouplabel", x: 12, y: 32 }, truncate(n.name, 24)));
+    // "−" when expanded (click to collapse), "+" when collapsed (click to expand).
+    g.appendChild(el("text", { "class": "expander", x: NODE_W - 14, y: 32 }, open ? "\u2212" : "+"));
+
+    g.addEventListener("click", (e) => { e.stopPropagation(); toggleGroup(n); });
+    g.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); toggleGroup(n); }
+    });
+    return g;
+  }
+
+  function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + "\u2026" : s; }
+
+  function ariaForNode(n) {
+    const parts = [(n.kind || "node"), n.name || "root"];
+    parts.push(n.change_state === "direct" ? "directly changed"
+             : n.change_state === "ancestor" ? "ancestor of a change"
+             : "unchanged");
+    const c = visibleCounts(n);
+    if (c.added || c.removed) parts.push(c.added + " added, " + c.removed + " removed");
+    if (hasChildren(n)) parts.push(expanded.has(n.id) ? "expanded" : (n.children.length + " children, collapsed"));
+    return parts.join(", ");
+  }
+
+  function toggleGroup(groupNode) {
+    const pid = groupNode.__parent.id;
+    if (groupsExpanded.has(pid)) groupsExpanded.delete(pid);
+    else groupsExpanded.add(pid);
+    layout();
+    // keep focus near where the group was
+    const parentReal = svg.querySelector('[data-id="' + cssEscape(pid) + '"]');
+    if (parentReal) parentReal.focus();
+  }
+
+  function onActivate(n, g) {
+    selectNode(n);
+    if (hasChildren(n)) {
+      if (expanded.has(n.id)) expanded.delete(n.id);
+      else expanded.add(n.id);
+      layout();
+      const again = svg.querySelector('[data-id="' + cssEscape(n.id) + '"]');
+      if (again) again.focus();
+    }
+  }
+
+  function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return s.replace(/["\\]/g, "\\$&");
+  }
+
+  // selection + detail
+  function selectNode(n) {
+    selectedId = n.id;
+    svg.querySelectorAll(".node.selected").forEach(e => e.classList.remove("selected"));
+    const g = svg.querySelector('[data-id="' + cssEscape(n.id) + '"]');
+    if (g) g.classList.add("selected");
+    renderDetail(n);
+  }
+
+  function renderDetail(n) {
+    const name = n.name && n.name.length ? n.name : "/ (repository root)";
+    let html = "";
+    html += '<h2>' + hesc(name) + '</h2>';
+    html += '<div class="path">' + (n.path ? hesc(n.path) : "<em>repository root</em>");
+    if (n.start != null && n.end != null) html += '  (lines ' + n.start + '\u2013' + n.end + ')';
+    html += '</div>';
+    html += '<span class="kindtag">' + hesc(n.kind || "") + '</span>';
+    html += '<span class="statetag ' + (n.change_state || "none") + '">' +
+            (n.change_state === "direct" ? "direct change"
+             : n.change_state === "ancestor" ? "ancestor of change"
+             : "unchanged") + '</span>';
+
+    html += '<section><h3>Summary</h3>';
+    html += n.summary ? '<div class="summary">' + hesc(n.summary) + '</div>'
+                      : '<p class="empty">No summary for this node.</p>';
+    html += '</section>';
+
+    if (n.change_state !== "none") {
+      html += '<section><h3>' +
+        (n.change_state === "ancestor" ? "Aggregated descendant changes" : "Change counts") +
+        '</h3>' + countsTable(n) + '</section>';
+    }
+
+    if (n.change_state === "direct") {
+      if ((n.kind === "class" || n.kind === "function") && n.source) {
+        html += '<section><h3>Source (base commit, for context)</h3>' + sourceBlock(n) + '</section>';
+      }
+      html += '<section><h3>Diff hunks by layer</h3>' + diffBlocks(n) + '</section>';
+    } else if (n.change_state === "ancestor") {
+      // Roll the diffs up from the direct descendants so the change is visible
+      // here without drilling all the way down to each leaf.
+      const leaves = collectLeafDiffs(n);
+      html += '<section><h3>Changes below this node</h3>' +
+              aggregatedDiffBlocks(leaves, n) + '</section>';
+    }
+
+    detail.innerHTML = html;
+  }
+
+  function countsTable(n) {
+    let rows = "";
+    let anyLayer = false;
+    for (const l of LAYERS) {
+      const a = n.annotations && n.annotations[l];
+      if (!a) continue;
+      anyLayer = true;
+      const dim = layerVisible[l] ? "" : ' style="opacity:.45"';
+      rows += '<tr' + dim + '><td><span class="layer-dot swatch ' + l + '"></span>' + l +
+              (layerVisible[l] ? "" : " (hidden)") + '</td>' +
+              '<td class="add">+' + (a.added || 0) + '</td>' +
+              '<td class="rm">\u2212' + (a.removed || 0) + '</td></tr>';
+    }
+    if (!anyLayer) return '<p class="empty">No per-layer counts.</p>';
+    return '<table class="counts-table"><thead><tr><th>Layer</th><th>Added</th><th>Removed</th></tr></thead><tbody>' +
+           rows + '</tbody></table>';
+  }
+
+  function sourceBlock(n) {
+    const lines = n.source.split("\n");
+    const startLn = n.start != null ? n.start : 1;
+    let out = '<pre class="code" aria-label="Source lines">';
+    lines.forEach((ln, i) => {
+      out += '<div class="srcln"><span class="ln">' + (startLn + i) + '</span>' +
+             '<span class="content">' + hesc(ln) + '</span></div>';
+    });
+    out += '</pre>';
+    return out;
+  }
+
+  function diffBlocks(n) {
+    const act = LAYERS.filter(l => n.annotations && n.annotations[l] && n.annotations[l].hunks);
+    const visible = act.filter(l => layerVisible[l]);
+    if (act.length === 0) return '<p class="empty">No diff hunks stored on this node.</p>';
+    if (visible.length === 0) return '<p class="empty">All changed layers are hidden. Enable a layer toggle to view diffs.</p>';
+
+    let out = "";
+    for (const l of visible) {
+      const ann = n.annotations[l];
+      out += '<div class="layer-block">';
+      out += '<div class="layer-head"><span class="layer-dot swatch ' + l + '"></span>' + l +
+             ' <span class="hint">(+' + (ann.added || 0) + ' / \u2212' + (ann.removed || 0) + ')</span></div>';
+      out += '<pre class="diff" aria-label="' + l + ' diff">';
+      for (const h of (ann.hunks || [])) {
+        if (h.header) out += '<div class="hunk-header">' + hesc(h.header) + '</div>';
+        for (const line of (h.lines || [])) {
+          const kind = line.kind || "context";
+          const oldn = line.old_lineno == null ? "" : line.old_lineno;
+          const newn = line.new_lineno == null ? "" : line.new_lineno;
+          out += '<div class="row ' + kind + '">' +
+                 '<span class="ln">' + oldn + '</span>' +
+                 '<span class="ln">' + newn + '</span>' +
+                 '<span class="content">' + hesc(line.content != null ? line.content : "") + '</span></div>';
+        }
+      }
+      out += '</pre></div>';
+    }
+    return out;
+  }
+
+  // Walk a subtree and collect every direct descendant that carries diff hunks,
+  // so an ancestor node can show the actual change without drilling to leaves.
+  function collectLeafDiffs(node) {
+    const leaves = [];
+    (function walk(n) {
+      if (n.change_state === "direct" &&
+          LAYERS.some(l => n.annotations && n.annotations[l] && n.annotations[l].hunks)) {
+        leaves.push(n);
+      }
+      for (const c of (n.children || [])) walk(c);
+    })(node);
+    return leaves;
+  }
+
+  // Render the diffs of a set of direct leaf nodes, grouped per leaf, respecting
+  // the layer toggles. Used for ancestor nodes (directories/modules/classes).
+  function aggregatedDiffBlocks(leaves, ancestor) {
+    if (leaves.length === 0) return '<p class="empty">No diff hunks below this node.</p>';
+
+    // How many of these leaves have a diff in at least one *visible* layer?
+    const withVisible = leaves.filter(leaf =>
+      LAYERS.some(l => layerVisible[l] && leaf.annotations && leaf.annotations[l] && leaf.annotations[l].hunks));
+    if (withVisible.length === 0) {
+      return '<p class="empty">All changed layers are hidden. Enable a layer toggle to view diffs.</p>';
+    }
+
+    let out = '<p class="hint">' + withVisible.length + ' changed ' +
+      (withVisible.length === 1 ? 'item' : 'items') + ' below ' +
+      hesc(ancestor.name || 'this node') + '. Select one in the graph to see it on its own.</p>';
+
+    for (const leaf of withVisible) {
+      // relative label: strip the ancestor's path prefix for readability
+      let label = leaf.path || leaf.name || leaf.id;
+      if (ancestor.path && label.indexOf(ancestor.path + "/") === 0) {
+        label = label.slice(ancestor.path.length + 1);
+      }
+      const sym = (leaf.kind === "class" || leaf.kind === "function") ? (" \u203A " + leaf.name) : "";
+      out += '<div class="leaf-diff">';
+      out += '<div class="leaf-head"><span class="kindtag">' + hesc(leaf.kind || "") + '</span>' +
+             '<span class="leaf-path">' + hesc(label) + hesc(sym) + '</span></div>';
+      out += diffBlocks(leaf);
+      out += '</div>';
+    }
+    return out;
+  }
+
+  // layer toggles
+  function wireLayerToggles() {
+    for (const l of LAYERS) {
+      const cb = document.getElementById("toggle-" + l);
+      cb.addEventListener("change", () => {
+        layerVisible[l] = cb.checked;
+        layout();
+        if (selectedId && nodesById.has(selectedId)) renderDetail(nodesById.get(selectedId));
+      });
+    }
+  }
+
+  // ---- scrolling: drag-to-pan, wheel, keyboard -----------------------------
+  function wireScrolling() {
+    // drag-to-pan on empty canvas (not on a node)
+    let panning = false, startX = 0, startY = 0, startL = 0, startT = 0;
+    graphWrap.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      // ignore drags that start on a node/group (those select/expand)
+      if (e.target.closest && e.target.closest(".node")) return;
+      panning = true;
+      graphWrap.classList.add("panning");
+      startX = e.clientX; startY = e.clientY;
+      startL = graphWrap.scrollLeft; startT = graphWrap.scrollTop;
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!panning) return;
+      graphWrap.scrollLeft = startL - (e.clientX - startX);
+      graphWrap.scrollTop = startT - (e.clientY - startY);
+    });
+    window.addEventListener("mouseup", () => {
+      if (!panning) return;
+      panning = false;
+      graphWrap.classList.remove("panning");
+    });
+
+    // wheel: vertical by default, horizontal with Shift. Native scroll already
+    // handles trackpads; we only intervene to support Shift=horizontal on mice.
+    graphWrap.addEventListener("wheel", (e) => {
+      if (e.shiftKey && e.deltaX === 0) {
+        graphWrap.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // keyboard panning when the canvas (not a node) is focused
+    graphWrap.addEventListener("keydown", (e) => {
+      if (e.target !== graphWrap) return;  // let node keyboard handlers run
+      const step = e.shiftKey ? 240 : 60;
+      let handled = true;
+      switch (e.key) {
+        case "ArrowLeft":  graphWrap.scrollLeft -= step; break;
+        case "ArrowRight": graphWrap.scrollLeft += step; break;
+        case "ArrowUp":    graphWrap.scrollTop -= step; break;
+        case "ArrowDown":  graphWrap.scrollTop += step; break;
+        case "PageUp":     graphWrap.scrollTop -= graphWrap.clientHeight * 0.9; break;
+        case "PageDown":   graphWrap.scrollTop += graphWrap.clientHeight * 0.9; break;
+        case "Home":       graphWrap.scrollTop = 0; graphWrap.scrollLeft = 0; break;
+        default: handled = false;
+      }
+      if (handled) e.preventDefault();
+    });
+  }
+
+  // ---- resizable detail pane ----------------------------------------------
+  function setDetailWidth(px) {
+    const maxW = Math.round(window.innerWidth * DETAIL_MAX_FRAC);
+    const w = Math.max(DETAIL_MIN, Math.min(px, maxW));
+    document.documentElement.style.setProperty("--detail-w", w + "px");
+  }
+  function wireResizer() {
+    let dragging = false;
+    resizer.addEventListener("mousedown", (e) => {
+      dragging = true;
+      resizer.classList.add("dragging");
+      document.body.classList.add("col-resizing");
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      // pane hugs the right edge; width = distance from cursor to the right edge
+      setDetailWidth(window.innerWidth - e.clientX);
+    });
+    window.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove("dragging");
+      document.body.classList.remove("col-resizing");
+    });
+    // keyboard resize
+    resizer.addEventListener("keydown", (e) => {
+      const cur = detail.getBoundingClientRect().width;
+      if (e.key === "ArrowLeft") { setDetailWidth(cur + 32); e.preventDefault(); }
+      else if (e.key === "ArrowRight") { setDetailWidth(cur - 32); e.preventDefault(); }
+    });
+    // keep within bounds on window resize
+    window.addEventListener("resize", () => {
+      setDetailWidth(detail.getBoundingClientRect().width);
+    });
+  }
+
+  // load
+  async function fetchJSON(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+    return res.json();
+  }
+
+  async function loadInstance(entry) {
+    try {
+      doc = await fetchJSON(entry.data);
+    } catch (err) {
+      showBanner("Could not load graph data <code>" + hesc(entry.data) + "</code>: " + hesc(err.message) +
+        ". Serve this folder over HTTP: <code>python -m http.server 8000</code> then open " +
+        "<code>http://localhost:8000/graph.html</code>.");
+      return;
+    }
+    initDoc();
+  }
+
+  function initDoc() {
+    root = doc.root;
+    nodesById.clear();
+    expanded.clear();
+    groupsExpanded.clear();
+    selectedId = null;
+    indexNodes(root, null, 0);
+    computeInitialExpansion(root);
+
+    metaLine.innerHTML =
+      '<code>' + hesc(doc.instance_id || "") + '</code> &middot; repo <code>' + hesc(doc.repo || "") + '</code>' +
+      (doc.base_commit ? ' &middot; base <code>' + hesc(String(doc.base_commit).slice(0, 10)) + '</code>' : '') +
+      ' &middot; summaries: ' + (doc.generated_with_llm ? 'LLM' : 'fallback');
+
+    layout();
+    graphWrap.scrollTop = 0; graphWrap.scrollLeft = 0;
+    detail.innerHTML = '<p class="empty">The graph starts fully collapsed. Click a node to ' +
+      'expand it one level and drill in; changed nodes are highlighted, and unchanged ' +
+      'siblings are folded into a dashed \u201CN unchanged\u201D group you can reveal. ' +
+      'Use \u201CExpand changed\u201D to jump to the changes, or \u201CReset view\u201D to collapse back.</p>';
+  }
+
+  async function boot() {
+    let manifest;
+    try {
+      manifest = await fetchJSON("manifest.json");
+    } catch (err) {
+      showBanner("Could not load <code>manifest.json</code>: " + hesc(err.message) +
+        ". This usually means the page was opened via <code>file://</code>. " +
+        "Serve the folder over HTTP instead: run <code>python -m http.server 8000</code> inside " +
+        "<code>trace-simulations/viz/</code> and open <code>http://localhost:8000/graph.html</code>.");
+      metaLine.textContent = "Load error — see banner above.";
+      return;
+    }
+
+    const instances = (manifest && manifest.instances) || [];
+    if (instances.length === 0) { showBanner("The manifest contains no instances."); return; }
+
+    if (instances.length > 1) {
+      instanceSelectLabel.style.display = "";
+      instances.forEach((ins, i) => {
+        const o = document.createElement("option");
+        o.value = String(i);
+        o.textContent = ins.instance_id || ins.data;
+        instanceSelect.appendChild(o);
+      });
+      instanceSelect.addEventListener("change", () => loadInstance(instances[Number(instanceSelect.value)]));
+    }
+    await loadInstance(instances[0]);
+  }
+
+  // controls
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (!root) return;
+    expanded.clear();
+    groupsExpanded.clear();
+    computeInitialExpansion(root);
+    layout();
+  });
+  document.getElementById("expandAllChanged").addEventListener("click", () => {
+    if (!root) return;
+    expandAllChanged();
+  });
+
+  wireLayerToggles();
+  wireScrolling();
+  wireResizer();
+  boot();
+})();
+</script>
+</body>
+</html>

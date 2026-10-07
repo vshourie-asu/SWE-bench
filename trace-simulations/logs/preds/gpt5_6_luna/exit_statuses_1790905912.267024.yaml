@@ -1,0 +1,6 @@
+instances_by_exit_status:
+    Submitted:
+    - astropy__astropy-14369
+    - django__django-14238
+    - pydata__xarray-6992
+    - scikit-learn__scikit-learn-13496
