@@ -181,5 +181,6 @@ trace-simulations/varun_credentials.conf
 !trace-simulations/logs
 
 # SWE-bench change-viz: local git clone cache and bulky generated viz JSON
-# trace-simulations/.repo-cache/
-# trace-simulations/viz/data/
+trace-simulations/.repo-cache/
+trace-simulations/viz/data/
+
