@@ -1,0 +1,123 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Scaffold the `viz/` package and ignore generated artifacts": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470210
+      },
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348478152
+      }
+    ],
+    "2.1 Implement `diffparse.py` data model and parser": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470471
+      },
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348479558
+      }
+    ],
+    "3.1 Implement `extract.py`": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470619
+      },
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348480501
+      }
+    ],
+    "4.1 Implement `clone.py`": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470770
+      },
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348481533
+      }
+    ],
+    "5. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470907
+      }
+    ],
+    "6.1 Implement tree walk and file-node reader": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348470986
+      }
+    ],
+    "6.2 Implement annotation merge": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471060
+      }
+    ],
+    "7.1 Implement `summarize.py`": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471124
+      }
+    ],
+    "8. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471208
+      }
+    ],
+    "9.1 Implement `build_viz.py` CLI and pipeline": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471318
+      }
+    ],
+    "10. Build the self-contained viewer (`viz/index.html`)": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471434
+      }
+    ],
+    "11. End-to-end smoke run and verification": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471515
+      }
+    ],
+    "12. Update `trace-simulations/README.md` with usage": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471569
+      }
+    ],
+    "13. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "8ede0e28-2916-4275-8ef8-845db4ffb107",
+        "chatSessionId": "sess_cdeff955-7716-4a7a-b189-a84e4dc13da2",
+        "timestamp": 1791348471674
+      }
+    ]
+  }
+}
